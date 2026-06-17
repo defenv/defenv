@@ -47,7 +47,7 @@ const api = {
   addProject: (name, path, schemaId) => rq("/api/projects", "POST", { spaceId: SPACE(), name, path, schemaId }),
   patchProject: (id, patch) => rq("/api/projects", "PATCH", { id, ...patch }),
   delProject: (id) => rq("/api/projects?id=" + id, "DELETE"),
-  importEnv: (text, groupId) => rq("/api/import", "POST", { spaceId: SPACE(), text, groupId }),
+  importEnv: (text, groupId, skipComments) => rq("/api/import", "POST", { spaceId: SPACE(), text, groupId, skipComments }),
   previewSchema: (schemaId) => rq("/api/generate", "POST", { schemaId }),
   previewProject: (projectId) => rq("/api/generate", "POST", { projectId }),
   generateProject: (projectId) => rq("/api/generate", "POST", { projectId, write: true }),
@@ -376,15 +376,16 @@ function modalProject(project) {
 
 function modalPaste() {
   openModal("Paste .env",
-    `<p class="hint" style="margin:0 0 8px">KEY=VALUE lines become variables in this space. New keys land in the chosen group.</p>
+    `<p class="hint" style="margin:0 0 8px">KEY=VALUE lines become variables in this space. New keys land in the chosen group. A <code>#</code> comment directly above a line is kept as the note for that variable.</p>
      <textarea class="fld mono" id="m-text" placeholder="DATABASE_URL=postgres://…&#10;JWT_SECRET=…"></textarea>
-     <div style="display:flex;gap:8px;align-items:center;margin-top:10px"><span class="label" style="margin:0">into group</span>
-       <select class="fld" id="m-group" style="flex:1">${groupOptions("")}</select></div>${actionsHtml("Import")}`,
+     <div style="display:flex;gap:14px;align-items:center;margin-top:10px;flex-wrap:wrap"><span class="label" style="margin:0">into group</span>
+       <select class="fld" id="m-group" style="flex:1;min-width:140px">${groupOptions("")}</select>
+       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);white-space:nowrap"><input type="checkbox" id="m-skip" /> skip comments</label></div>${actionsHtml("Import")}`,
     { wide: true, onMount: (r) => {
       $("[data-act=modal-cancel]", r).onclick = closeModal;
       $("[data-act=modal-save]", r).onclick = async () => {
         const text = $("#m-text", r).value; if (!text.trim()) return;
-        const rep = await run(() => api.importEnv(text, $("#m-group", r).value || null));
+        const rep = await run(() => api.importEnv(text, $("#m-group", r).value || null, $("#m-skip", r).checked));
         if (rep) { toast("ok", `Imported: ${rep.created.length} new, ${rep.updated.length} updated`); closeModal(); }
       };
     } });

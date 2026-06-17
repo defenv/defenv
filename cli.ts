@@ -3,12 +3,11 @@
 // Everything is scoped to a space (override the active one with --space).
 
 import { Store, NotFoundError, ConflictError } from "./src/core/store.ts";
-import { parseEnv } from "./src/core/dotenv.ts";
 import { envFileFor, generateProject, renderEnv } from "./src/core/generate.ts";
 import { startServer } from "./src/server/server.ts";
 
 // ---- tiny arg parser (no deps) ----
-const BOOLS = new Set(["secret", "print", "help", "h", "ungroup"]);
+const BOOLS = new Set(["secret", "print", "help", "h", "ungroup", "skip-comments"]);
 const MULTI = new Set(["group", "var"]);
 interface Args { _: string[]; [k: string]: unknown; }
 function parse(argv: string[]): Args {
@@ -79,7 +78,7 @@ ${bold("PROJECTS")}    (link a path to a schema, then generate)
   defenv project gen NAME
 
 ${bold("LOAD / GENERATE")}
-  defenv import FILE [--group G]
+  defenv import FILE [--group G] [--skip-comments]
   defenv gen SCHEMA [--out FILE | --print]
 
 ${bold("MISC")}
@@ -188,7 +187,7 @@ async function importEnv() {
     const cid = spaceIdOf(s);
     const group = groupArgs[0] ? s.findGroup(cid, groupArgs[0]) : null;
     if (groupArgs[0] && !group) fail(`no group "${groupArgs[0]}"`);
-    const rep = s.importEnv(cid, await Deno.readTextFile(file), parseEnv, group?.id ?? null);
+    const rep = s.importEnv(cid, await Deno.readTextFile(file), { groupId: group?.id ?? null, skipComments: !!args["skip-comments"] });
     await s.save();
     console.log(green(`imported: ${rep.created.length} new, ${rep.updated.length} updated`));
     if (rep.created.length) console.log(dim("  new: " + rep.created.join(", ")));

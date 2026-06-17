@@ -13,6 +13,7 @@ import {
   DB_VERSION,
   emptyDatabase,
 } from "./types.ts";
+import { parseEnvEntries } from "./dotenv.ts";
 import { dbPath } from "./paths.ts";
 
 const now = () => new Date().toISOString();
@@ -458,21 +459,22 @@ export class Store {
 
   // ----- Import ------------------------------------------------------------
 
-  importEnv(spaceId: string, text: string, parse: (t: string) => Record<string, string>, groupId?: string | null): { created: string[]; updated: string[] } {
+  importEnv(spaceId: string, text: string, opts: { groupId?: string | null; skipComments?: boolean } = {}): { created: string[]; updated: string[] } {
     this.getSpace(spaceId);
-    if (groupId) this.groupById(groupId);
-    const scope = groupId ?? null;
+    const scope = opts.groupId ?? null;
+    if (scope) this.groupById(scope);
     const created: string[] = [];
     const updated: string[] = [];
-    for (const [key, value] of Object.entries(parse(text))) {
-      const existing = this.variableInScope(spaceId, scope, key);
+    for (const entry of parseEnvEntries(text, { skipComments: opts.skipComments })) {
+      const existing = this.variableInScope(spaceId, scope, entry.key);
       if (existing) {
-        existing.value = value;
+        existing.value = entry.value;
+        if (entry.description !== undefined) existing.description = entry.description;
         existing.updatedAt = now();
-        updated.push(key);
+        updated.push(entry.key);
       } else {
-        this.addVariable({ spaceId, key, value, groupId: scope });
-        created.push(key);
+        this.addVariable({ spaceId, key: entry.key, value: entry.value, groupId: scope, description: entry.description });
+        created.push(entry.key);
       }
     }
     return { created, updated };

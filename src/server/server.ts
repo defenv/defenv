@@ -2,7 +2,6 @@
 // Uses only built-in Deno APIs, so `deno run -A` needs no network and no build.
 
 import { Store, NotFoundError, ConflictError } from "../core/store.ts";
-import { parseEnv } from "../core/dotenv.ts";
 import { renderEnv, generateProject } from "../core/generate.ts";
 import { ASSETS } from "./assets.ts";
 
@@ -57,7 +56,7 @@ async function api(req: Request, url: URL): Promise<Response> {
     if (req.method === "PATCH") { const b = await body(); return handle((s) => s.updateProject(b.id, { name: b.name, path: b.path, schemaId: b.schemaId })); }
     if (req.method === "DELETE") return handle((s) => { s.removeProject(id()); return { ok: true }; });
   }
-  if (path === "/api/import" && req.method === "POST") { const b = await body(); return handle((s) => s.importEnv(b.spaceId, b.text ?? "", parseEnv, b.groupId ?? null)); }
+  if (path === "/api/import" && req.method === "POST") { const b = await body(); return handle((s) => s.importEnv(b.spaceId, b.text ?? "", { groupId: b.groupId ?? null, skipComments: !!b.skipComments })); }
   if (path === "/api/generate" && req.method === "POST") {
     const b = await body();
     return handle(async (s) => {

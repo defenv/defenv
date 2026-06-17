@@ -130,7 +130,8 @@ ids) — the three tabs below always show the active space. Same core as the CLI
   **Deleting is select-then-confirm**: tick one or more rows (or click a row) and a
   **Delete N** button appears, so nothing is removed by a single misclick. Live
   **search** over keys, values, and notes; a **Paste .env** popup bulk-imports
-  `KEY=VALUE` text into a chosen group.
+  `KEY=VALUE` text into a chosen group, with a **skip comments** toggle (off by
+  default, so a `#` line directly above a variable is kept as its note).
 - **Schemas** — green **group chips** + mono **loose-var chips** per schema.
   **Compose** opens a popup with checkbox lists of every group and loose variable
   and a **live count** of the resolved `.env`. Rename, **preview .env**, delete.
@@ -159,7 +160,7 @@ SCHEMAS     defenv schema add NAME [--group A --group B ...] [--var K --var L ..
 PROJECTS    defenv project add NAME --path P --schema S
             defenv project set NAME [--path P] [--schema S] | rm NAME | ls
             defenv project gen NAME
-LOAD/GEN    defenv import FILE [--group G]
+LOAD/GEN    defenv import FILE [--group G] [--skip-comments]
             defenv gen SCHEMA [--out FILE | --print]
 MISC        defenv ui [--port 8765]   ·   defenv where
 ```
