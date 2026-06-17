@@ -128,7 +128,8 @@ ids) — the three tabs below always show the active space. Same core as the CLI
   per-row **eye** (show/hide) and **copy** icons that colour green when active, a
   **lock** icon to mark/unmark secret, a **quote** icon to force the value to be
   exported wrapped in double quotes (set automatically when a value is imported
-  quoted, and always on for values containing `#`), and **Show all / Hide all**.
+  quoted, and always on for values containing `#`); the **copy** icon then copies
+  the value *with* its surrounding quotes. Plus **Show all / Hide all**.
   **Deleting is select-then-confirm**: tick one or more rows (or click a row) and a
   **Delete N** button appears, so nothing is removed by a single misclick. Live
   **search** over keys, values, and notes; a **Paste .env** popup bulk-imports

@@ -54,6 +54,16 @@ const api = {
   generateProject: (projectId) => rq("/api/generate", "POST", { projectId, write: true }),
 };
 
+// ---- value quoting (mirrors the .env serializer for copy / display) ----
+function quoteValue(v) {
+  return '"' + String(v ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t") + '"';
+}
+
 // ---- download (append + delayed revoke so the browser actually saves) ----
 function downloadFile(filename, text, mime) {
   const url = URL.createObjectURL(new Blob([text], { type: mime || "text/plain" }));
@@ -452,7 +462,10 @@ function wireContent() {
       t.classList.toggle("on", on); t.title = on ? "Hide value" : "Show value"; t.innerHTML = on ? ICON.eye : ICON.eyeOff;
     } else if (act === "copy") {
       const inp = c.querySelector(`input[data-change=var-value][data-id="${id}"]`);
-      navigator.clipboard.writeText(inp ? inp.value : "").then(() => toast("ok", "Copied"));
+      const v = state.db.variables.find((x) => x.id === id);
+      const raw = inp ? inp.value : (v ? v.value : "");
+      const text = v && v.quoted ? quoteValue(raw) : raw;
+      navigator.clipboard.writeText(text).then(() => toast("ok", v && v.quoted ? "Copied (quoted)" : "Copied"));
     } else if (act === "toggle-secret") { const v = state.db.variables.find((x) => x.id === id); run(() => api.patchVar(id, { secret: !v.secret })); }
     else if (act === "toggle-quote") { const v = state.db.variables.find((x) => x.id === id); run(() => api.patchVar(id, { quoted: !v.quoted })); }
     else if (act === "show-all") { secretIds().forEach((i) => state.revealed.add(i)); renderContent(); }
