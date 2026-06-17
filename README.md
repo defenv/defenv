@@ -25,18 +25,18 @@ Space  (e.g. microservice1 — isolated from microservice2)
 
 The only requirement is [Deno](https://deno.land) 2.x. Pick whichever fits:
 
-**From a local checkout** (you have the source):
+**From source** (clone the repo):
 
 ```sh
-sh install.sh
-# or, equivalently:
-deno task install
+git clone https://github.com/defenv/defenv
+cd defenv
+sh install.sh        # or, equivalently: deno task install
 ```
 
 **Remote one-liner** (downloads the source over HTTPS — never asks for a login):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/OWNER/defenv/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/defenv/defenv/HEAD/install.sh | sh
 ```
 
 All three install a global `defenv` command. Then:
@@ -48,10 +48,11 @@ defenv ui          # launch the web UI at http://localhost:8765
 
 Notes:
 
-- Replace `OWNER/defenv` with your GitHub owner/repo for the remote one-liner, or
-  set `DEFENV_REPO=you/defenv`. The installer uses a tarball download (curl/wget),
-  so it **never prompts for a GitHub username or password** — if the repo is
-  private or the name is wrong it simply fails with a clear message.
+- The remote one-liner pulls from [`defenv/defenv`](https://github.com/defenv/defenv)
+  via a tarball download (curl/wget), so it **never prompts for a GitHub username or
+  password**. `HEAD` follows the repo's default branch automatically (no need to know
+  if it is `master` or `main`); pin a branch/tag/SHA with `DEFENV_REF=…`, or install
+  from a fork with `DEFENV_REPO=you/defenv`.
 - Point the installer at any local copy with `DEFENV_SRC=/path/to/defenv sh install.sh`.
 - `defenv install` puts the binary shim in Deno's bin dir (usually `~/.deno/bin`).
   If that isn't on your `PATH`, add `export PATH="$HOME/.deno/bin:$PATH"`.
