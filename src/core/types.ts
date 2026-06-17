@@ -27,6 +27,7 @@ export interface Variable {
   groupId: string | null;
   secret: boolean;
   description?: string;
+  quoted?: boolean; // always wrap in double quotes on export (preserves intent / handles '#')
   order: number;
   createdAt: string;
   updatedAt: string;

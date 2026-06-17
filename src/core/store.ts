@@ -82,14 +82,27 @@ export class Store {
 
   static async open(path: string = dbPath()): Promise<Store> {
     let db: Database;
+    let migrated = false;
+    let existed = true;
     try {
       const raw = JSON.parse(await Deno.readTextFile(path));
-      db = typeof raw.version === "number" ? migrate(raw) : emptyDatabase();
+      if (typeof raw.version === "number") {
+        migrated = raw.version !== DB_VERSION;
+        db = migrate(raw);
+      } else {
+        db = emptyDatabase();
+        existed = false;
+      }
     } catch (err) {
       if (!(err instanceof Deno.errors.NotFound)) throw err;
       db = emptyDatabase();
+      existed = false;
     }
-    return new Store(path, db);
+    const store = new Store(path, db);
+    // First run (or an upgraded/seeded db): write it out now so the default
+    // space gets a STABLE id, instead of being re-seeded on every read.
+    if (!existed || migrated) await store.save();
+    return store;
   }
 
   get data(): Database {
@@ -233,7 +246,7 @@ export class Store {
     return this.#db.variables.find((v) => v.spaceId === spaceId && v.groupId === groupId && v.key === key);
   }
 
-  addVariable(input: { spaceId: string; key: string; value?: string; groupId?: string | null; secret?: boolean; description?: string }): Variable {
+  addVariable(input: { spaceId: string; key: string; value?: string; groupId?: string | null; secret?: boolean; description?: string; quoted?: boolean }): Variable {
     this.getSpace(input.spaceId);
     const key = input.key.trim();
     if (!KEY_RE.test(key)) throw new ConflictError(`"${key}" is not a valid env var name.`);
@@ -252,6 +265,7 @@ export class Store {
       groupId,
       secret: input.secret ?? false,
       description: input.description,
+      quoted: input.quoted || undefined,
       order,
       createdAt: now(),
       updatedAt: now(),
@@ -259,7 +273,7 @@ export class Store {
     this.#db.variables.push(v);
     return v;
   }
-  updateVariable(id: string, patch: { key?: string; value?: string; secret?: boolean; description?: string }): Variable {
+  updateVariable(id: string, patch: { key?: string; value?: string; secret?: boolean; description?: string; quoted?: boolean }): Variable {
     const v = this.variableById(id);
     if (patch.key !== undefined) {
       const key = patch.key.trim();
@@ -271,6 +285,7 @@ export class Store {
     if (patch.value !== undefined) v.value = patch.value;
     if (patch.secret !== undefined) v.secret = patch.secret;
     if (patch.description !== undefined) v.description = patch.description;
+    if (patch.quoted !== undefined) v.quoted = patch.quoted || undefined;
     v.updatedAt = now();
     return v;
   }
@@ -470,10 +485,11 @@ export class Store {
       if (existing) {
         existing.value = entry.value;
         if (entry.description !== undefined) existing.description = entry.description;
+        existing.quoted = entry.quoted || undefined;
         existing.updatedAt = now();
         updated.push(entry.key);
       } else {
-        this.addVariable({ spaceId, key: entry.key, value: entry.value, groupId: scope, description: entry.description });
+        this.addVariable({ spaceId, key: entry.key, value: entry.value, groupId: scope, description: entry.description, quoted: entry.quoted });
         created.push(entry.key);
       }
     }

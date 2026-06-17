@@ -126,7 +126,9 @@ ids) — the three tabs below always show the active space. Same core as the CLI
   with a count and inline rename; each row edits key/value, carries an optional
   **note**, and reassigns the group. Secret values are **hidden by default** with
   per-row **eye** (show/hide) and **copy** icons that colour green when active, a
-  **lock** icon to mark/unmark secret, and **Show all / Hide all** buttons.
+  **lock** icon to mark/unmark secret, a **quote** icon to force the value to be
+  exported wrapped in double quotes (set automatically when a value is imported
+  quoted, and always on for values containing `#`), and **Show all / Hide all**.
   **Deleting is select-then-confirm**: tick one or more rows (or click a row) and a
   **Delete N** button appears, so nothing is removed by a single misclick. Live
   **search** over keys, values, and notes; a **Paste .env** popup bulk-imports
@@ -149,7 +151,7 @@ and generates.
 ```
 SPACES    defenv space add NAME | use NAME | rename OLD NEW | rm NAME | ls
           defenv space export [NAME] [--out FILE] | import FILE
-VARIABLES   defenv var add KEY [VALUE] [--group G] [--secret] [--desc D]
+VARIABLES   defenv var add KEY [VALUE] [--group G] [--secret] [--quote] [--desc D]
             defenv var set KEY VALUE | rm KEY | ls [--group G]
             defenv var mv KEY (--group G | --ungroup)
 GROUPS      defenv group add NAME [--desc D] | rename OLD NEW | rm NAME | ls

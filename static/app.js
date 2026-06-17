@@ -5,7 +5,7 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const state = { db: null, tab: "vars", query: "", revealed: new Set(), selected: new Set() };
-const SPACE = () => (state.db ? state.db.activeSpaceId : null);
+const SPACE = () => (state.db ? (state.db.activeSpaceId || (state.db.spaces[0] && state.db.spaces[0].id) || null) : null);
 
 const ICON = {
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -14,6 +14,7 @@ const ICON = {
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
   unlock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.9-1"/></svg>',
   plus: '<svg class="plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>',
+  quote: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 7h3.2v3.2c0 2.3-1.5 3.9-3.7 4.3l-.4-1.3c1.1-.3 1.8-1 1.9-2H7V7zm6.6 0H17v3.2c0 2.3-1.5 3.9-3.7 4.3l-.4-1.3c1.1-.3 1.8-1 1.9-2h-1.6V7z"/></svg>',
   paste: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 13h6M9 17h4"/></svg>',
 };
 
@@ -145,13 +146,14 @@ function varRow(v) {
   const eye = v.secret ? `<button class="iconbtn ${revealed ? "on" : ""}" data-act="reveal" data-id="${v.id}" title="${revealed ? "Hide" : "Show"} value">${revealed ? ICON.eye : ICON.eyeOff}</button>` : "";
   const copy = `<button class="iconbtn" data-act="copy" data-id="${v.id}" title="Copy value">${ICON.copy}</button>`;
   const lock = `<button class="iconbtn ${v.secret ? "on" : ""}" data-act="toggle-secret" data-id="${v.id}" title="${v.secret ? "Secret (click to unmark)" : "Mark as secret"}">${v.secret ? ICON.lock : ICON.unlock}</button>`;
+  const quote = `<button class="iconbtn ${v.quoted ? "on" : ""}" data-act="toggle-quote" data-id="${v.id}" title="${v.quoted ? "Exported with double quotes" : "Force double quotes on export"}">${ICON.quote}</button>`;
   const sel = state.selected.has(v.id);
   return `<div class="vitem ${sel ? "selected" : ""}" data-vid="${v.id}">
     <div class="row">
       <input type="checkbox" class="selbox" data-sel="${v.id}" ${sel ? "checked" : ""} title="Select for deletion" />
       <input class="cell" value="${esc(v.key)}" data-change="var-key" data-id="${v.id}" spellcheck="false" />
       <input class="cell" type="${revealed ? "text" : "password"}" value="${esc(v.value)}" placeholder="value" data-change="var-value" data-id="${v.id}" spellcheck="false" />
-      <div class="acticons">${eye}${copy}${lock}</div>
+      <div class="acticons">${eye}${copy}${quote}${lock}</div>
       <select class="gsel" data-change="var-group" data-id="${v.id}">${groupOptions(v.groupId || "")}</select>
     </div>
     <div class="vdesc"><input value="${esc(v.description || "")}" placeholder="note / description (optional)" data-change="var-desc" data-id="${v.id}" spellcheck="false" /></div>
@@ -220,6 +222,14 @@ function renderSpaces() {
   sel.innerHTML = sortBy(state.db.spaces, "order").map((c) => `<option value="${c.id}"${c.id === SPACE() ? " selected" : ""}>${esc(c.name)}</option>`).join("");
 }
 function renderContent() {
+  if (!state.db || !state.db.spaces.length) {
+    $("#content").innerHTML = `<div class="empty-state">
+      <h2>Welcome to defenv</h2>
+      <p class="hint">Create a space to get started — one space per microservice or project.</p>
+      <button class="btn-primary" data-act="new-space">${ICON.plus}Create a space</button>
+    </div>`;
+    return;
+  }
   $("#content").innerHTML = state.tab === "vars" ? renderVars() : state.tab === "schemas" ? renderSchemas() : renderProjects();
 }
 
@@ -271,12 +281,13 @@ function modalVariable(groupId) {
      <div style="display:flex;gap:12px;align-items:center;margin-top:10px">
        <select class="fld" id="m-group" style="flex:1">${groupOptions(groupId || "")}</select>
        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)"><input type="checkbox" id="m-secret" /> secret</label>
+       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)"><input type="checkbox" id="m-quote" /> double quotes</label>
      </div>${actionsHtml("Create")}`,
     { onMount: (r) => {
       $("[data-act=modal-cancel]", r).onclick = closeModal;
       $("[data-act=modal-save]", r).onclick = async () => {
         const key = $("#m-key", r).value.trim(); if (!key) return;
-        await run(() => api.addVar({ key, value: $("#m-val", r).value, description: $("#m-desc", r).value || undefined, groupId: $("#m-group", r).value || null, secret: $("#m-secret", r).checked }), "Variable created");
+        await run(() => api.addVar({ key, value: $("#m-val", r).value, description: $("#m-desc", r).value || undefined, groupId: $("#m-group", r).value || null, secret: $("#m-secret", r).checked, quoted: $("#m-quote", r).checked }), "Variable created");
         closeModal();
       };
     } });
@@ -417,7 +428,8 @@ function wireContent() {
     }
     const t = e.target.closest("[data-act]"); if (!t) return;
     const act = t.getAttribute("data-act"), id = t.getAttribute("data-id");
-    if (act === "new-variable") modalVariable(null);
+    if (act === "new-space") modalSpace(null);
+    else if (act === "new-variable") modalVariable(null);
     else if (act === "new-group") modalGroup(null);
     else if (act === "paste") modalPaste();
     else if (act === "add-var") modalVariable(id);
@@ -442,6 +454,7 @@ function wireContent() {
       const inp = c.querySelector(`input[data-change=var-value][data-id="${id}"]`);
       navigator.clipboard.writeText(inp ? inp.value : "").then(() => toast("ok", "Copied"));
     } else if (act === "toggle-secret") { const v = state.db.variables.find((x) => x.id === id); run(() => api.patchVar(id, { secret: !v.secret })); }
+    else if (act === "toggle-quote") { const v = state.db.variables.find((x) => x.id === id); run(() => api.patchVar(id, { quoted: !v.quoted })); }
     else if (act === "show-all") { secretIds().forEach((i) => state.revealed.add(i)); renderContent(); }
     else if (act === "hide-all") { state.revealed.clear(); renderContent(); }
     else if (act === "new-schema") modalSchema(null);

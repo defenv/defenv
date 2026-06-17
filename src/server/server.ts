@@ -42,8 +42,8 @@ async function api(req: Request, url: URL): Promise<Response> {
     if (req.method === "DELETE") return handle((s) => { s.removeGroup(id()); return { ok: true }; });
   }
   if (path === "/api/variables") {
-    if (req.method === "POST") { const b = await body(); return handle((s) => s.addVariable({ spaceId: b.spaceId, key: b.key, value: b.value ?? "", groupId: b.groupId ?? null, secret: !!b.secret, description: b.description })); }
-    if (req.method === "PATCH") { const b = await body(); return handle((s) => b.action === "move" ? s.moveVariable(b.id, b.groupId ?? null, b.beforeId ?? null) : s.updateVariable(b.id, { key: b.newKey, value: b.value, secret: b.secret, description: b.description })); }
+    if (req.method === "POST") { const b = await body(); return handle((s) => s.addVariable({ spaceId: b.spaceId, key: b.key, value: b.value ?? "", groupId: b.groupId ?? null, secret: !!b.secret, description: b.description, quoted: b.quoted })); }
+    if (req.method === "PATCH") { const b = await body(); return handle((s) => b.action === "move" ? s.moveVariable(b.id, b.groupId ?? null, b.beforeId ?? null) : s.updateVariable(b.id, { key: b.newKey, value: b.value, secret: b.secret, description: b.description, quoted: b.quoted })); }
     if (req.method === "DELETE") return handle((s) => { s.removeVariable(id()); return { ok: true }; });
   }
   if (path === "/api/schemas") {

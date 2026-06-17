@@ -10,9 +10,11 @@
 const SAFE = /^[A-Za-z0-9_.\-/:@+=?&,%~]*$/;
 
 /** Quote/escape a value following common dotenv conventions. */
-export function serializeValue(value: string): string {
-  if (value === "") return "";
-  if (SAFE.test(value)) return value;
+export function serializeValue(value: string, forceQuote = false): string {
+  if (!forceQuote) {
+    if (value === "") return "";
+    if (SAFE.test(value)) return value;
+  }
   const escaped = value
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
@@ -46,6 +48,7 @@ export interface EnvEntry {
   key: string;
   value: string;
   description?: string;
+  quoted?: boolean; // the source wrapped this value in quotes
 }
 
 /**
@@ -72,7 +75,11 @@ export function parseEnvEntries(text: string, opts: { skipComments?: boolean } =
     if (eq === -1) { comment = null; continue; }
     const key = line.slice(0, eq).trim();
     if (!KEY_OK.test(key)) { comment = null; continue; }
-    out.push({ key, value: unquote(line.slice(eq + 1)), description: comment ?? undefined });
+    const rawVal = line.slice(eq + 1).trim();
+    const quoted = rawVal.length >= 2 &&
+      ((rawVal[0] === '"' && rawVal[rawVal.length - 1] === '"') ||
+       (rawVal[0] === "'" && rawVal[rawVal.length - 1] === "'"));
+    out.push({ key, value: unquote(rawVal), description: comment ?? undefined, quoted: quoted || undefined });
     comment = null;
   }
   return out;

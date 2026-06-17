@@ -7,7 +7,7 @@ import { envFileFor, generateProject, renderEnv } from "./src/core/generate.ts";
 import { startServer } from "./src/server/server.ts";
 
 // ---- tiny arg parser (no deps) ----
-const BOOLS = new Set(["secret", "print", "help", "h", "ungroup", "skip-comments"]);
+const BOOLS = new Set(["secret", "print", "help", "h", "ungroup", "skip-comments", "quote"]);
 const MULTI = new Set(["group", "var"]);
 interface Args { _: string[]; [k: string]: unknown; }
 function parse(argv: string[]): Args {
@@ -59,7 +59,7 @@ ${bold("SPACES")}   (a top-level scope, e.g. a microservice)
 Everything below operates on the active space (override with --space NAME).
 
 ${bold("VARIABLES")}   (KEY is unique within a (space, group) scope)
-  defenv var add KEY [VALUE] [--group G] [--secret] [--desc D]
+  defenv var add KEY [VALUE] [--group G] [--secret] [--quote] [--desc D]
   defenv var set KEY VALUE | rm KEY | ls [--group G]
   defenv var mv KEY (--group G | --ungroup)
 
@@ -115,7 +115,7 @@ async function vars() {
       const key = need(rest[0], "var add KEY [VALUE]");
       const group = groupArgs[0] ? s.findGroup(cid, groupArgs[0]) : null;
       if (groupArgs[0] && !group) fail(`no group "${groupArgs[0]}"`);
-      s.addVariable({ spaceId: cid, key, value: rest[1] ?? "", groupId: group?.id ?? null, secret: !!args.secret, description: str("desc") });
+      s.addVariable({ spaceId: cid, key, value: rest[1] ?? "", groupId: group?.id ?? null, secret: !!args.secret, description: str("desc"), quoted: !!args.quote });
       await s.save(); console.log(green(`+ ${key}`));
     } else if (sub === "set") { const v = findVar(need(rest[0], "var set KEY VALUE")); s.updateVariable(v.id, { value: need(rest[1], "var set KEY VALUE") }); await s.save(); console.log(green(`set ${v.key}`)); }
     else if (sub === "mv") {

@@ -69,7 +69,7 @@ export function renderEnv(store: Store, schema: Schema): RenderResult {
     const keys: string[] = [];
     for (const v of section.variables) {
       if (v.description) lines.push(`# ${v.description}`);
-      lines.push(`${v.key}=${serializeValue(v.value)}`);
+      lines.push(`${v.key}=${serializeValue(v.value, v.quoted)}`);
       keys.push(v.key);
       count++;
     }
