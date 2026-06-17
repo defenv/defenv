@@ -140,8 +140,9 @@ ids) — the three tabs below always show the active space. Same core as the CLI
   and a **live count** of the resolved `.env`. Rename, **preview .env**, delete.
 - **Projects** — each shows its path and linked-schema chip. **Preview** the
   resolved `.env`, **edit** the link, **Generate .env** with one click (a toast
-  confirms `Generated N vars → /path/.env`), or export a committable
-  **.env.example** (keys only, no values — secrets never leak).
+  confirms `Generated N vars → /path/.env`), export a committable
+  **.env.example** (keys only, no values — secrets never leak), or copy a plain
+  **keys** list to paste straight into a schema's required-keys contract.
 
 Popups animate in over a dimmed overlay; toasts slide in after loads, creates,
 and generates.

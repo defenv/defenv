@@ -4,7 +4,7 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const state = { db: null, tab: "vars", query: "", revealed: new Set(), selected: new Set() };
+const state = { db: null, tab: "vars", query: "", revealed: new Set(), selected: new Set(), reqOpen: new Set() };
 const SPACE = () => (state.db ? (state.db.activeSpaceId || (state.db.spaces[0] && state.db.spaces[0].id) || null) : null);
 
 const ICON = {
@@ -186,10 +186,17 @@ function renderRequired(s) {
   if (!req.length) return `<div class="required"><div class="req-head"><span class="label" style="margin:0">Required keys</span><button class="lnk" data-act="edit-required" data-id="${s.id}">+ add</button></div><span class="hint">No contract yet — add the keys this schema must produce.</span></div>`;
   const resolved = schemaResolvedKeys(s);
   const missing = req.filter((k) => !resolved.has(k));
+  const present = req.length - missing.length;
+  const open = state.reqOpen.has(s.id);
+  const pctOk = Math.round((present / req.length) * 100);
   return `<div class="required">
-    <div class="req-head"><span class="label" style="margin:0">Required keys</span><button class="lnk" data-act="edit-required" data-id="${s.id}">edit</button></div>
-    <div class="chips">${req.map((k) => `<span class="chip ${resolved.has(k) ? "ok" : "missing"}">${esc(k)}</span>`).join("")}</div>
-    ${missing.length ? `<div class="missing-note">Missing ${missing.length}: ${missing.map(esc).join(", ")}</div>` : `<div class="ok-note">✓ all ${req.length} required key(s) present</div>`}
+    <div class="req-head">
+      <button class="lnk req-toggle" data-act="toggle-required" data-id="${s.id}">${open ? "▾" : "▸"} Required keys</button>
+      <span class="req-summary"><span class="ok-count">${present}/${req.length} present</span>${missing.length ? ` · <span class="miss-count">${missing.length} missing</span>` : ""}</span>
+      <button class="lnk" data-act="edit-required" data-id="${s.id}" style="margin-left:auto">edit</button>
+    </div>
+    <div class="req-bar" title="${present} present, ${missing.length} missing"><div class="req-fill-ok" style="width:${pctOk}%"></div><div class="req-fill-miss" style="width:${100 - pctOk}%"></div></div>
+    ${open ? `<div class="chips">${req.map((k) => `<span class="chip ${resolved.has(k) ? "ok" : "missing"}">${esc(k)}</span>`).join("")}</div>${missing.length ? `<div class="missing-note">Missing: ${missing.map(esc).join(", ")}</div>` : `<div class="ok-note">✓ all required keys present</div>`}` : ""}
   </div>`;
 }
 function renderSchemas() {
@@ -242,6 +249,7 @@ function renderProjects() {
       </div>
       <div class="prow"><code class="path">${esc(p.path)}</code>
         <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn" data-act="keys-project" data-id="${p.id}" ${sn ? "" : "disabled"}>keys</button>
           <button class="btn" data-act="example-project" data-id="${p.id}" ${sn ? "" : "disabled"}>.env.example</button>
           <button class="btn-primary" data-act="gen-project" data-id="${p.id}" ${sn ? "" : "disabled"}>Generate .env</button>
         </div>
@@ -549,11 +557,19 @@ function wireContent() {
     else if (act === "preview-schema") run(() => api.previewSchema(id)).then((res) => res && modalPreview(res, "schema .env"));
     else if (act === "del-schema") { if (confirm("Delete this schema?")) run(() => api.delSchema(id)); }
     else if (act === "edit-required") modalRequired(state.db.schemas.find((s) => s.id === id));
+    else if (act === "toggle-required") { state.reqOpen.has(id) ? state.reqOpen.delete(id) : state.reqOpen.add(id); renderContent(); }
     else if (act === "new-project") modalProject(null);
     else if (act === "edit-project") modalProject(state.db.projects.find((p) => p.id === id));
     else if (act === "preview-project") run(() => api.previewProject(id)).then((res) => res && modalPreview(res, "project → .env"));
     else if (act === "gen-project") run(() => api.generateProject(id)).then((res) => res && toast("ok", `Generated ${res.count} vars → ${res.path}`));
     else if (act === "example-project") run(() => api.previewExample(id)).then((res) => res && modalPreview(res, "project → .env.example", ".env.example"));
+    else if (act === "keys-project") {
+      const p = state.db.projects.find((x) => x.id === id);
+      const schema = p && state.db.schemas.find((x) => x.id === p.schemaId);
+      if (!schema) { toast("err", "This project has no schema."); return; }
+      const keys = [...schemaResolvedKeys(schema)];
+      modalPreview({ content: keys.join("\n"), count: keys.length }, "keys (paste into a schema's required list)", "keys.txt");
+    }
     else if (act === "del-project") { if (confirm("Delete this project?")) run(() => api.delProject(id)); }
   });
   c.addEventListener("change", (e) => {
