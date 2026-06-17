@@ -139,8 +139,9 @@ ids) — the three tabs below always show the active space. Same core as the CLI
   **Compose** opens a popup with checkbox lists of every group and loose variable
   and a **live count** of the resolved `.env`. Rename, **preview .env**, delete.
 - **Projects** — each shows its path and linked-schema chip. **Preview** the
-  resolved `.env`, **edit** the link, or **Generate .env** with one click — a
-  toast confirms `Generated N vars → /path/.env`.
+  resolved `.env`, **edit** the link, **Generate .env** with one click (a toast
+  confirms `Generated N vars → /path/.env`), or export a committable
+  **.env.example** (keys only, no values — secrets never leak).
 
 Popups animate in over a dimmed overlay; toasts slide in after loads, creates,
 and generates.
