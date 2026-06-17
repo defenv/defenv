@@ -106,7 +106,9 @@ function renderVars() {
     <button class="btn-primary" data-act="new-variable">${ICON.plus}Variable</button>
     <button class="btn" data-act="new-group">${ICON.plus}Group</button>
     <button class="btn" data-act="paste">${ICON.paste}Paste .env</button>
-    <div style="margin-left:auto;display:flex;gap:6px">
+    <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn" data-act="collapse-all">Collapse all</button>
+      <button class="btn" data-act="expand-all">Expand all</button>
       <button class="btn" data-act="show-all">Show all</button>
       <button class="btn" data-act="hide-all">Hide all</button>
     </div>
@@ -171,6 +173,23 @@ function varRow(v) {
 }
 
 // ---- render: Schemas ----
+function schemaResolvedKeys(schema) {
+  const keys = new Set();
+  for (const gid of schema.groupIds) for (const v of state.db.variables) if (v.spaceId === schema.spaceId && v.groupId === gid) keys.add(v.key);
+  for (const vid of schema.variableIds) { const v = state.db.variables.find((x) => x.id === vid); if (v) keys.add(v.key); }
+  return keys;
+}
+function renderRequired(s) {
+  const req = s.required || [];
+  if (!req.length) return `<div class="required"><div class="req-head"><span class="label" style="margin:0">Required keys</span><button class="lnk" data-act="edit-required" data-id="${s.id}">+ add</button></div><span class="hint">No contract yet — add the keys this schema must produce.</span></div>`;
+  const resolved = schemaResolvedKeys(s);
+  const missing = req.filter((k) => !resolved.has(k));
+  return `<div class="required">
+    <div class="req-head"><span class="label" style="margin:0">Required keys</span><button class="lnk" data-act="edit-required" data-id="${s.id}">edit</button></div>
+    <div class="chips">${req.map((k) => `<span class="chip ${resolved.has(k) ? "ok" : "missing"}">${esc(k)}</span>`).join("")}</div>
+    ${missing.length ? `<div class="missing-note">Missing ${missing.length}: ${missing.map(esc).join(", ")}</div>` : `<div class="ok-note">✓ all ${req.length} required key(s) present</div>`}
+  </div>`;
+}
 function renderSchemas() {
   const groupName = (id) => { const g = state.db.groups.find((x) => x.id === id); return g ? g.name : "?"; };
   const varKey = (id) => { const v = state.db.variables.find((x) => x.id === id); return v ? v.key : "?"; };
@@ -194,6 +213,7 @@ function renderSchemas() {
         ${looseOnly.map((id) => `<span class="chip var">${esc(varKey(id))}</span>`).join("")}
         ${s.groupIds.length === 0 && looseOnly.length === 0 ? `<span class="hint">empty — click “compose”.</span>` : ""}
       </div>
+      ${renderRequired(s)}
     </div>`;
   }
   return html;
@@ -252,6 +272,12 @@ function openModal(title, bodyHtml, opts = {}) {
   root.innerHTML = `<div class="overlay" data-act="overlay"><div class="modal ${opts.wide ? "wide" : ""}"><h3>${esc(title)}</h3>${bodyHtml}</div></div>`;
   $(".overlay", root).addEventListener("click", (e) => { if (e.target.classList.contains("overlay")) closeModal(); });
   if (opts.onMount) opts.onMount(root);
+  root.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.tagName === "INPUT") {
+      const save = root.querySelector("[data-act=modal-save]");
+      if (save) { e.preventDefault(); save.click(); }
+    }
+  });
   const f = root.querySelector("[autofocus]");
   if (f) f.focus();
 }
@@ -376,6 +402,20 @@ function modalMoveSelected() {
     } });
 }
 
+function modalRequired(schema) {
+  openModal(`Required keys — ${schema.name}`,
+    `<p class="hint" style="margin:0 0 8px">One key per line (commas or spaces also work). The schema is checked against these — any key its groups and loose variables do not produce is shown in <b style="color:var(--danger)">red</b>.</p>
+     <textarea class="fld mono" id="m-req" placeholder="DATABASE_URL&#10;JWT_SECRET&#10;PORT" style="min-height:160px">${esc((schema.required || []).join("\n"))}</textarea>${actionsHtml("Save")}`,
+    { wide: true, onMount: (r) => {
+      $("[data-act=modal-cancel]", r).onclick = closeModal;
+      $("[data-act=modal-save]", r).onclick = async () => {
+        const keys = [...new Set($("#m-req", r).value.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean))];
+        await run(() => api.patchSchema(schema.id, { required: keys }), "Required keys saved");
+        closeModal();
+      };
+    } });
+}
+
 function modalProject(project) {
   const schemas = schemasSorted();
   const sel = project ? project.schemaId : (schemas[0] && schemas[0].id) || "";
@@ -447,6 +487,12 @@ function wireContent() {
     else if (act === "del-group") { if (confirm("Delete this group? Its variables become ungrouped.")) run(() => api.delGroup(id)); }
     else if (act === "toggle-group") { const g = state.db.groups.find((x) => x.id === id); run(() => api.patchGroup(id, { collapsed: !g.collapsed })); }
     else if (act === "clear-sel") { state.selected.clear(); renderContent(); }
+    else if (act === "collapse-all" || act === "expand-all") {
+      const collapsed = act === "collapse-all";
+      const gs = groupsSorted().filter((g) => g.collapsed !== collapsed);
+      if (!gs.length) return;
+      (async () => { try { for (const g of gs) await api.patchGroup(g.id, { collapsed }); await reload(); } catch (e) { toast("err", e.message); await reload(); } })();
+    }
     else if (act === "move-selected") modalMoveSelected();
     else if (act === "del-selected") {
       const ids = state.db.variables.filter((v) => v.spaceId === SPACE() && state.selected.has(v.id)).map((v) => v.id);
@@ -475,6 +521,7 @@ function wireContent() {
     else if (act === "rename-schema") modalSchema(state.db.schemas.find((s) => s.id === id));
     else if (act === "preview-schema") run(() => api.previewSchema(id)).then((res) => res && modalPreview(res, "schema .env"));
     else if (act === "del-schema") { if (confirm("Delete this schema?")) run(() => api.delSchema(id)); }
+    else if (act === "edit-required") modalRequired(state.db.schemas.find((s) => s.id === id));
     else if (act === "new-project") modalProject(null);
     else if (act === "edit-project") modalProject(state.db.projects.find((p) => p.id === id));
     else if (act === "preview-project") run(() => api.previewProject(id)).then((res) => res && modalPreview(res, "project → .env"));
@@ -502,10 +549,11 @@ function initShell() {
   document.querySelectorAll(".pill[data-tab]").forEach((p) => p.addEventListener("click", () => {
     state.tab = p.getAttribute("data-tab");
     document.querySelectorAll(".pill").forEach((x) => x.classList.toggle("active", x === p));
-    $("#search").style.visibility = state.tab === "vars" ? "visible" : "hidden";
+    $("#searchwrap").style.visibility = state.tab === "vars" ? "visible" : "hidden";
     renderContent();
   }));
-  $("#search").addEventListener("input", (e) => { state.query = e.target.value; renderContent(); });
+  $("#search").addEventListener("input", (e) => { state.query = e.target.value; $("#search-clear").hidden = !e.target.value; renderContent(); });
+  $("#search-clear").addEventListener("click", () => { const i = $("#search"); i.value = ""; state.query = ""; $("#search-clear").hidden = true; renderContent(); i.focus(); });
   $("#theme-toggle").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
   $("#space-select").addEventListener("change", (e) => { state.revealed.clear(); state.selected.clear(); run(() => api.activateSpace(e.target.value)); });
   $("#space-new").addEventListener("click", () => modalSpace(null));

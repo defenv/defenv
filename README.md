@@ -131,8 +131,8 @@ ids) — the three tabs below always show the active space. Same core as the CLI
   quoted, and always on for values containing `#`); the **copy** icon then copies
   the value *with* its surrounding quotes. Plus **Show all / Hide all**.
   **Deleting is select-then-confirm**: tick one or more rows (or click a row) and a
-  **Delete N** button appears, so nothing is removed by a single misclick. Live
-  **search** over keys, values, and notes; a **Paste .env** popup bulk-imports
+  **Delete N** button appears, so nothing is removed by a single misclick. Groups **collapse/expand** individually or via **Collapse all / Expand all**. Live
+  **search** over keys, values, and notes (with a clear button); a **Paste .env** popup bulk-imports
   `KEY=VALUE` text into a chosen group, with a **skip comments** toggle (off by
   default, so a `#` line directly above a variable is kept as its note).
 - **Schemas** — green **group chips** + mono **loose-var chips** per schema.

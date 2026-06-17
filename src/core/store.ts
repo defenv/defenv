@@ -329,7 +329,7 @@ export class Store {
     return inCtx.find((s) => s.id === ref) ?? inCtx.find((s) => s.name === ref);
   }
 
-  addSchema(input: { spaceId: string; name: string; description?: string; groupIds?: string[]; variableIds?: string[] }): Schema {
+  addSchema(input: { spaceId: string; name: string; description?: string; groupIds?: string[]; variableIds?: string[]; required?: string[] }): Schema {
     this.getSpace(input.spaceId);
     const name = input.name.trim();
     if (!name) throw new ConflictError("Schema name cannot be empty.");
@@ -337,11 +337,11 @@ export class Store {
     for (const id of input.groupIds ?? []) if (this.groupById(id).spaceId !== input.spaceId) throw new ConflictError("Group belongs to a different space.");
     for (const id of input.variableIds ?? []) if (this.variableById(id).spaceId !== input.spaceId) throw new ConflictError("Variable belongs to a different space.");
     const order = this.schemasIn(input.spaceId).reduce((m, s) => Math.max(m, s.order), -1) + 1;
-    const s: Schema = { id: uid(), spaceId: input.spaceId, name, description: input.description, groupIds: input.groupIds ?? [], variableIds: input.variableIds ?? [], order, createdAt: now(), updatedAt: now() };
+    const s: Schema = { id: uid(), spaceId: input.spaceId, name, description: input.description, groupIds: input.groupIds ?? [], variableIds: input.variableIds ?? [], required: input.required ?? [], order, createdAt: now(), updatedAt: now() };
     this.#db.schemas.push(s);
     return s;
   }
-  updateSchema(id: string, patch: { name?: string; description?: string; groupIds?: string[]; variableIds?: string[] }): Schema {
+  updateSchema(id: string, patch: { name?: string; description?: string; groupIds?: string[]; variableIds?: string[]; required?: string[] }): Schema {
     const s = this.schemaById(id);
     if (patch.name !== undefined) {
       const name = patch.name.trim();
@@ -353,6 +353,7 @@ export class Store {
     if (patch.description !== undefined) s.description = patch.description;
     if (patch.groupIds !== undefined) s.groupIds = patch.groupIds;
     if (patch.variableIds !== undefined) s.variableIds = patch.variableIds;
+    if (patch.required !== undefined) s.required = patch.required;
     s.updatedAt = now();
     return s;
   }

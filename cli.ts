@@ -70,6 +70,7 @@ ${bold("SCHEMAS")}     (a schema = chosen groups + loose vars)
   defenv schema add NAME [--group A --group B ...] [--var K --var L ...]
   defenv schema add-group NAME GROUP | rm-group NAME GROUP
   defenv schema add-var NAME KEY    | rm-var NAME KEY
+  defenv schema require NAME KEY [KEY...]   (validation contract)
   defenv schema show NAME | ls | rm NAME
 
 ${bold("PROJECTS")}    (link a path to a schema, then generate)
@@ -152,12 +153,21 @@ async function schemas() {
     else if (sub === "rm-group") { s.toggleSchemaGroup(findSc(need(rest[0], "schema rm-group NAME GROUP")).id, findGr(need(rest[1], "schema rm-group NAME GROUP")).id, false); await s.save(); console.log(green("removed")); }
     else if (sub === "add-var") { s.toggleSchemaVariable(findSc(need(rest[0], "schema add-var NAME KEY")).id, findV(need(rest[1], "schema add-var NAME KEY")).id, true); await s.save(); console.log(green("added")); }
     else if (sub === "rm-var") { s.toggleSchemaVariable(findSc(need(rest[0], "schema rm-var NAME KEY")).id, findV(need(rest[1], "schema rm-var NAME KEY")).id, false); await s.save(); console.log(green("removed")); }
+    else if (sub === "require") { const sc = findSc(need(rest[0], "schema require NAME KEY...")); const keys = [...new Set(rest.slice(1))]; s.updateSchema(sc.id, { required: keys }); await s.save(); console.log(green(`required keys set (${keys.length})`)); }
     else if (sub === "rm") { s.removeSchema(findSc(need(rest[0], "schema rm NAME")).id); await s.save(); console.log(green("removed")); }
     else if (sub === "show") {
       const sc = findSc(need(rest[0], "schema show NAME"));
       console.log(bold(sc.name));
       console.log(dim("groups: ") + (sc.groupIds.map((id) => { try { return s.groupById(id).name; } catch { return "?"; } }).join(", ") || "(none)"));
       console.log(dim("vars:   ") + (sc.variableIds.map((id) => { try { return s.variableById(id).key; } catch { return "?"; } }).join(", ") || "(none)"));
+      const req = sc.required ?? [];
+      if (req.length) {
+        const produced = new Set(renderEnv(s, sc).sections.flatMap((x) => x.keys));
+        const missing = req.filter((k) => !produced.has(k));
+        console.log(dim("required: ") + req.map((k) => (produced.has(k) ? green(k) : red(k))).join(", "));
+        if (missing.length) console.log(red(`missing: ${missing.join(", ")}`));
+        else console.log(green("all required keys present"));
+      }
     } else { for (const sc of s.schemasIn(cid)) console.log(`${bold(sc.name)}  ${dim(`${sc.groupIds.length} groups, ${sc.variableIds.length} loose vars`)}`); if (!s.schemasIn(cid).length) console.log(dim("(no schemas)")); }
   });
 }

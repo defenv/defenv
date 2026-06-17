@@ -48,7 +48,7 @@ async function api(req: Request, url: URL): Promise<Response> {
   }
   if (path === "/api/schemas") {
     if (req.method === "POST") { const b = await body(); return handle((s) => s.addSchema({ spaceId: b.spaceId, name: b.name, description: b.description, groupIds: b.groupIds ?? [], variableIds: b.variableIds ?? [] })); }
-    if (req.method === "PATCH") { const b = await body(); return handle((s) => b.action === "toggleGroup" ? s.toggleSchemaGroup(b.id, b.groupId, b.on) : b.action === "toggleVariable" ? s.toggleSchemaVariable(b.id, b.variableId, b.on) : s.updateSchema(b.id, { name: b.name, description: b.description, groupIds: b.groupIds, variableIds: b.variableIds })); }
+    if (req.method === "PATCH") { const b = await body(); return handle((s) => b.action === "toggleGroup" ? s.toggleSchemaGroup(b.id, b.groupId, b.on) : b.action === "toggleVariable" ? s.toggleSchemaVariable(b.id, b.variableId, b.on) : s.updateSchema(b.id, { name: b.name, description: b.description, groupIds: b.groupIds, variableIds: b.variableIds, required: b.required })); }
     if (req.method === "DELETE") return handle((s) => { s.removeSchema(id()); return { ok: true }; });
   }
   if (path === "/api/projects") {

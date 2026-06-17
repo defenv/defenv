@@ -51,6 +51,7 @@ export interface Schema {
   description?: string;
   groupIds: string[];
   variableIds: string[];
+  required?: string[]; // required env var KEYS this schema must produce (textual contract)
   order: number;
   createdAt: string;
   updatedAt: string;
