@@ -1,0 +1,16 @@
+{
+  "name": "defenv",
+  "tasks": {
+    "ui": "deno run -A cli.ts ui",
+    "cli": "deno run -A cli.ts",
+    "serve": "deno run -A src/server/server.ts",
+    "check": "deno check cli.ts",
+    "install": "deno install -gf -A --name defenv ./cli.ts"
+  },
+  "compilerOptions": {
+    "lib": ["deno.window", "dom", "dom.iterable"],
+    "strict": true
+  },
+  "fmt": { "lineWidth": 140 },
+  "lint": { "rules": { "tags": ["recommended"] } }
+}
