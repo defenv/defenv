@@ -51,6 +51,8 @@ const api = {
   importEnv: (text, groupId, skipComments) => rq("/api/import", "POST", { spaceId: SPACE(), text, groupId, skipComments }),
   previewSchema: (schemaId) => rq("/api/generate", "POST", { schemaId }),
   previewProject: (projectId) => rq("/api/generate", "POST", { projectId }),
+  previewExample: (projectId) => rq("/api/generate", "POST", { projectId, example: true }),
+  importJson: (record, groupId) => rq("/api/import", "POST", { spaceId: SPACE(), format: "json", record, groupId }),
   generateProject: (projectId) => rq("/api/generate", "POST", { projectId, write: true }),
 };
 
@@ -105,7 +107,7 @@ function renderVars() {
   let html = `<div class="toolbar">
     <button class="btn-primary" data-act="new-variable">${ICON.plus}Variable</button>
     <button class="btn" data-act="new-group">${ICON.plus}Group</button>
-    <button class="btn" data-act="paste">${ICON.paste}Paste .env</button>
+    <button class="btn" data-act="paste">${ICON.paste}Import</button>
     <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
       <button class="btn" data-act="collapse-all">Collapse all</button>
       <button class="btn" data-act="expand-all">Expand all</button>
@@ -239,7 +241,10 @@ function renderProjects() {
         </div>
       </div>
       <div class="prow"><code class="path">${esc(p.path)}</code>
-        <button class="btn-primary" style="margin-left:auto" data-act="gen-project" data-id="${p.id}" ${sn ? "" : "disabled"}>Generate .env</button>
+        <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn" data-act="example-project" data-id="${p.id}" ${sn ? "" : "disabled"}>.env.example</button>
+          <button class="btn-primary" data-act="gen-project" data-id="${p.id}" ${sn ? "" : "disabled"}>Generate .env</button>
+        </div>
       </div>
     </div>`;
   }
@@ -436,23 +441,45 @@ function modalProject(project) {
 }
 
 function modalPaste() {
-  openModal("Paste .env",
-    `<p class="hint" style="margin:0 0 8px">KEY=VALUE lines become variables in this space. New keys land in the chosen group. A <code>#</code> comment directly above a line is kept as the note for that variable.</p>
+  openModal("Import variables",
+    `<div style="display:flex;gap:8px;align-items:center;margin:0 0 10px">
+       <span class="label" style="margin:0">format</span>
+       <label class="seg"><input type="radio" name="fmt" value="env" checked /> .env</label>
+       <label class="seg"><input type="radio" name="fmt" value="json" /> JSON</label>
+     </div>
+     <p class="hint" id="m-hint" style="margin:0 0 8px">KEY=VALUE lines become variables. A <code>#</code> comment directly above a line is kept as the note. Quoted values keep their quotes.</p>
      <textarea class="fld mono" id="m-text" placeholder="DATABASE_URL=postgres://…&#10;JWT_SECRET=…"></textarea>
      <div style="display:flex;gap:14px;align-items:center;margin-top:10px;flex-wrap:wrap"><span class="label" style="margin:0">into group</span>
        <select class="fld" id="m-group" style="flex:1;min-width:140px">${groupOptions("")}</select>
-       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);white-space:nowrap"><input type="checkbox" id="m-skip" /> skip comments</label></div>${actionsHtml("Import")}`,
+       <label id="m-skip-wrap" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);white-space:nowrap"><input type="checkbox" id="m-skip" /> skip comments</label></div>${actionsHtml("Import")}`,
     { wide: true, onMount: (r) => {
+      const fmt = () => r.querySelector('input[name="fmt"]:checked').value;
+      const ta = $("#m-text", r), hint = $("#m-hint", r), skipWrap = $("#m-skip-wrap", r);
+      r.querySelectorAll('input[name="fmt"]').forEach((el) => el.addEventListener("change", () => {
+        const json = fmt() === "json";
+        ta.placeholder = json ? '{\n  "DATABASE_URL": "postgres://…",\n  "JWT_SECRET": "…"\n}' : "DATABASE_URL=postgres://…\nJWT_SECRET=…";
+        hint.innerHTML = json ? "A flat JSON object of <code>{ \"key\": \"value\" }</code> becomes variables in this space." : "KEY=VALUE lines become variables. A <code>#</code> comment directly above a line is kept as the note. Quoted values keep their quotes.";
+        skipWrap.style.display = json ? "none" : "";
+      }));
       $("[data-act=modal-cancel]", r).onclick = closeModal;
       $("[data-act=modal-save]", r).onclick = async () => {
-        const text = $("#m-text", r).value; if (!text.trim()) return;
-        const rep = await run(() => api.importEnv(text, $("#m-group", r).value || null, $("#m-skip", r).checked));
+        const text = ta.value; if (!text.trim()) return;
+        const groupId = $("#m-group", r).value || null;
+        let rep;
+        if (fmt() === "json") {
+          let obj;
+          try { obj = JSON.parse(text); } catch { toast("err", "That is not valid JSON."); return; }
+          if (typeof obj !== "object" || Array.isArray(obj) || obj === null) { toast("err", "Expected a JSON object of key: value pairs."); return; }
+          rep = await run(() => api.importJson(obj, groupId));
+        } else {
+          rep = await run(() => api.importEnv(text, groupId, $("#m-skip", r).checked));
+        }
         if (rep) { toast("ok", `Imported: ${rep.created.length} new, ${rep.updated.length} updated`); closeModal(); }
       };
     } });
 }
 
-function modalPreview(result, title) {
+function modalPreview(result, title, filename = ".env") {
   openModal(title,
     `<p class="hint" style="margin:0 0 8px">${result.count} variable(s)${result.path ? ` → <code class="mono">${esc(result.path)}</code>` : ""}</p>
      <pre class="env">${esc(result.content)}</pre>
@@ -460,7 +487,7 @@ function modalPreview(result, title) {
     { wide: true, onMount: (r) => {
       $("[data-act=modal-cancel]", r).onclick = closeModal;
       $("[data-act=copy]", r).onclick = () => navigator.clipboard.writeText(result.content).then(() => toast("ok", "Copied to clipboard"));
-      $("[data-act=download]", r).onclick = () => downloadFile(".env", result.content, "text/plain");
+      $("[data-act=download]", r).onclick = () => downloadFile(filename, result.content, "text/plain");
     } });
 }
 
@@ -526,6 +553,7 @@ function wireContent() {
     else if (act === "edit-project") modalProject(state.db.projects.find((p) => p.id === id));
     else if (act === "preview-project") run(() => api.previewProject(id)).then((res) => res && modalPreview(res, "project → .env"));
     else if (act === "gen-project") run(() => api.generateProject(id)).then((res) => res && toast("ok", `Generated ${res.count} vars → ${res.path}`));
+    else if (act === "example-project") run(() => api.previewExample(id)).then((res) => res && modalPreview(res, "project → .env.example", ".env.example"));
     else if (act === "del-project") { if (confirm("Delete this project?")) run(() => api.delProject(id)); }
   });
   c.addEventListener("change", (e) => {

@@ -475,6 +475,28 @@ export class Store {
 
   // ----- Import ------------------------------------------------------------
 
+  /** Import a flat { key: value } record (e.g. parsed JSON) into a space. */
+  importRecord(spaceId: string, record: Record<string, unknown>, opts: { groupId?: string | null } = {}): { created: string[]; updated: string[] } {
+    this.getSpace(spaceId);
+    const scope = opts.groupId ?? null;
+    if (scope) this.groupById(scope);
+    const created: string[] = [];
+    const updated: string[] = [];
+    for (const [key, raw] of Object.entries(record)) {
+      const value = raw === null || raw === undefined ? "" : typeof raw === "string" ? raw : String(raw);
+      const existing = this.variableInScope(spaceId, scope, key);
+      if (existing) {
+        existing.value = value;
+        existing.updatedAt = now();
+        updated.push(key);
+      } else {
+        this.addVariable({ spaceId, key, value, groupId: scope });
+        created.push(key);
+      }
+    }
+    return { created, updated };
+  }
+
   importEnv(spaceId: string, text: string, opts: { groupId?: string | null; skipComments?: boolean } = {}): { created: string[]; updated: string[] } {
     this.getSpace(spaceId);
     const scope = opts.groupId ?? null;

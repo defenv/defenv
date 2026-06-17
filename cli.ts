@@ -3,11 +3,11 @@
 // Everything is scoped to a space (override the active one with --space).
 
 import { Store, NotFoundError, ConflictError } from "./src/core/store.ts";
-import { envFileFor, generateProject, renderEnv } from "./src/core/generate.ts";
+import { envFileFor, generateProject, generateProjectExample, renderEnv } from "./src/core/generate.ts";
 import { startServer } from "./src/server/server.ts";
 
 // ---- tiny arg parser (no deps) ----
-const BOOLS = new Set(["secret", "print", "help", "h", "ungroup", "skip-comments", "quote"]);
+const BOOLS = new Set(["secret", "print", "help", "h", "ungroup", "skip-comments", "quote", "example", "json"]);
 const MULTI = new Set(["group", "var"]);
 interface Args { _: string[]; [k: string]: unknown; }
 function parse(argv: string[]): Args {
@@ -76,11 +76,11 @@ ${bold("SCHEMAS")}     (a schema = chosen groups + loose vars)
 ${bold("PROJECTS")}    (link a path to a schema, then generate)
   defenv project add NAME --path P --schema S
   defenv project set NAME [--path P] [--schema S] | rm NAME | ls
-  defenv project gen NAME
+  defenv project gen NAME [--example]
 
 ${bold("LOAD / GENERATE")}
-  defenv import FILE [--group G] [--skip-comments]
-  defenv gen SCHEMA [--out FILE | --print]
+  defenv import FILE [--group G] [--skip-comments] [--json]
+  defenv gen SCHEMA [--out FILE | --print] [--example]
 
 ${bold("MISC")}
   defenv ui [--port 8765]   ·   defenv where`);
@@ -186,7 +186,7 @@ async function projects() {
       const schemaId = str("schema") ? (s.findSchema(cid, str("schema")!)?.id ?? fail(`no schema "${str("schema")}"`)) : undefined;
       s.updateProject(p.id, { path: str("path"), schemaId }); await s.save(); console.log(green("updated"));
     } else if (sub === "rm") { s.removeProject(findP(need(rest[0], "project rm NAME")).id); await s.save(); console.log(green("removed")); }
-    else if (sub === "gen") { const res = await generateProject(s, findP(need(rest[0], "project gen NAME")).id); console.log(green(`wrote ${res.path}`), dim(`(${res.count} vars)`)); }
+    else if (sub === "gen") { const pid = findP(need(rest[0], "project gen NAME")).id; const res = args.example ? await generateProjectExample(s, pid) : await generateProject(s, pid); console.log(green(`wrote ${res.path}`), dim(`(${res.count} vars)`)); }
     else { for (const p of s.projectsIn(cid)) { let sn = "(no schema)"; try { sn = s.schemaById(p.schemaId).name; } catch { /* */ } console.log(`${bold(p.name)}  ${dim(p.path)}  ${cyan("→ " + sn)}`); } if (!s.projectsIn(cid).length) console.log(dim("(no projects)")); }
   });
 }
@@ -197,7 +197,10 @@ async function importEnv() {
     const cid = spaceIdOf(s);
     const group = groupArgs[0] ? s.findGroup(cid, groupArgs[0]) : null;
     if (groupArgs[0] && !group) fail(`no group "${groupArgs[0]}"`);
-    const rep = s.importEnv(cid, await Deno.readTextFile(file), { groupId: group?.id ?? null, skipComments: !!args["skip-comments"] });
+    const body = await Deno.readTextFile(file);
+    const rep = args.json
+      ? s.importRecord(cid, JSON.parse(body), { groupId: group?.id ?? null })
+      : s.importEnv(cid, body, { groupId: group?.id ?? null, skipComments: !!args["skip-comments"] });
     await s.save();
     console.log(green(`imported: ${rep.created.length} new, ${rep.updated.length} updated`));
     if (rep.created.length) console.log(dim("  new: " + rep.created.join(", ")));
@@ -208,7 +211,7 @@ async function gen() {
   await withStore(async (s) => {
     const cid = spaceIdOf(s);
     const schema = s.findSchema(cid, need(sub, "gen SCHEMA")); if (!schema) fail(`no schema "${sub}"`);
-    const res = renderEnv(s, schema);
+    const res = renderEnv(s, schema, { example: !!args.example });
     if (str("out")) { const path = envFileFor(str("out")!); await Deno.writeTextFile(path, res.content); console.log(green(`wrote ${path}`), dim(`(${res.count} vars)`)); }
     else console.log(res.content);
   });

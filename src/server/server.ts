@@ -2,7 +2,7 @@
 // Uses only built-in Deno APIs, so `deno run -A` needs no network and no build.
 
 import { Store, NotFoundError, ConflictError } from "../core/store.ts";
-import { renderEnv, generateProject } from "../core/generate.ts";
+import { renderEnv, generateProject, generateProjectExample } from "../core/generate.ts";
 import { ASSETS } from "./assets.ts";
 
 function json(data: unknown, status = 200): Response {
@@ -56,16 +56,21 @@ async function api(req: Request, url: URL): Promise<Response> {
     if (req.method === "PATCH") { const b = await body(); return handle((s) => s.updateProject(b.id, { name: b.name, path: b.path, schemaId: b.schemaId })); }
     if (req.method === "DELETE") return handle((s) => { s.removeProject(id()); return { ok: true }; });
   }
-  if (path === "/api/import" && req.method === "POST") { const b = await body(); return handle((s) => s.importEnv(b.spaceId, b.text ?? "", { groupId: b.groupId ?? null, skipComments: !!b.skipComments })); }
+  if (path === "/api/import" && req.method === "POST") { const b = await body(); return handle((s) => b.format === "json" ? s.importRecord(b.spaceId, b.record ?? {}, { groupId: b.groupId ?? null }) : s.importEnv(b.spaceId, b.text ?? "", { groupId: b.groupId ?? null, skipComments: !!b.skipComments })); }
   if (path === "/api/generate" && req.method === "POST") {
     const b = await body();
     return handle(async (s) => {
       if (b.projectId) {
-        if (b.write) return await generateProject(s, b.projectId);
         const project = s.projectById(b.projectId);
-        return { ...renderEnv(s, s.schemaById(project.schemaId)), path: project.path };
+        const schema = s.schemaById(project.schemaId);
+        if (b.example) {
+          if (b.write) return await generateProjectExample(s, b.projectId);
+          return { ...renderEnv(s, schema, { example: true }), path: project.path };
+        }
+        if (b.write) return await generateProject(s, b.projectId);
+        return { ...renderEnv(s, schema), path: project.path };
       }
-      return renderEnv(s, s.schemaById(b.schemaId));
+      return renderEnv(s, s.schemaById(b.schemaId), { example: !!b.example });
     }, false);
   }
   return json({ error: "not found" }, 404);
