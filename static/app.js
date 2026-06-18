@@ -160,7 +160,9 @@ function varRow(v) {
   const eye = v.secret ? `<button class="iconbtn ${revealed ? "on" : ""}" data-act="reveal" data-id="${v.id}" title="${revealed ? "Hide" : "Show"} value">${revealed ? ICON.eye : ICON.eyeOff}</button>` : "";
   const copy = `<button class="iconbtn" data-act="copy" data-id="${v.id}" title="Copy value">${ICON.copy}</button>`;
   const lock = `<button class="iconbtn ${v.secret ? "on" : ""}" data-act="toggle-secret" data-id="${v.id}" title="${v.secret ? "Secret (click to unmark)" : "Mark as secret"}">${v.secret ? ICON.lock : ICON.unlock}</button>`;
-  const quote = `<button class="iconbtn ${v.quoted ? "on" : ""}" data-act="toggle-quote" data-id="${v.id}" title="${v.quoted ? "Exported with double quotes" : "Force double quotes on export"}">${ICON.quote}</button>`;
+  const qLabel = v.quote === "double" ? "double quotes" : v.quote === "single" ? "single quotes" : v.quote === "none" ? "no quotes" : "auto";
+  const qOn = v.quote === "single" || v.quote === "double";
+  const quote = `<button class="iconbtn ${qOn ? "on" : ""}" data-act="cycle-quote" data-id="${v.id}" title="Quoting on export: ${qLabel} (click to change)">${ICON.quote}</button>`;
   const sel = state.selected.has(v.id);
   return `<div class="vitem ${sel ? "selected" : ""}" data-vid="${v.id}">
     <div class="row">
@@ -330,13 +332,13 @@ function modalVariable(groupId) {
      <div style="display:flex;gap:12px;align-items:center;margin-top:10px">
        <select class="fld" id="m-group" style="flex:1">${groupOptions(groupId || "")}</select>
        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)"><input type="checkbox" id="m-secret" /> secret</label>
-       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)"><input type="checkbox" id="m-quote" /> double quotes</label>
+       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">quotes <select id="m-quote" class="fld" style="width:auto;padding:4px 8px"><option value="">auto</option><option value="none">none</option><option value="single">single</option><option value="double">double</option></select></label>
      </div>${actionsHtml("Create")}`,
     { onMount: (r) => {
       $("[data-act=modal-cancel]", r).onclick = closeModal;
       $("[data-act=modal-save]", r).onclick = async () => {
         const key = $("#m-key", r).value.trim(); if (!key) return;
-        await run(() => api.addVar({ key, value: $("#m-val", r).value, description: $("#m-desc", r).value || undefined, groupId: $("#m-group", r).value || null, secret: $("#m-secret", r).checked, quoted: $("#m-quote", r).checked }), "Variable created");
+        await run(() => api.addVar({ key, value: $("#m-val", r).value, description: $("#m-desc", r).value || undefined, groupId: $("#m-group", r).value || null, secret: $("#m-secret", r).checked, quote: $("#m-quote", r).value || undefined }), "Variable created");
         closeModal();
       };
     } });
@@ -545,10 +547,16 @@ function wireContent() {
       const inp = c.querySelector(`input[data-change=var-value][data-id="${id}"]`);
       const v = state.db.variables.find((x) => x.id === id);
       const raw = inp ? inp.value : (v ? v.value : "");
-      const text = v && v.quoted ? quoteValue(raw) : raw;
-      navigator.clipboard.writeText(text).then(() => toast("ok", v && v.quoted ? "Copied (quoted)" : "Copied"));
+      const q = v && v.quote;
+      const text = q === "double" ? quoteValue(raw) : q === "single" ? `'${raw}'` : raw;
+      navigator.clipboard.writeText(text).then(() => toast("ok", q === "single" || q === "double" ? "Copied (quoted)" : "Copied"));
     } else if (act === "toggle-secret") { const v = state.db.variables.find((x) => x.id === id); run(() => api.patchVar(id, { secret: !v.secret })); }
-    else if (act === "toggle-quote") { const v = state.db.variables.find((x) => x.id === id); run(() => api.patchVar(id, { quoted: !v.quoted })); }
+    else if (act === "cycle-quote") {
+      const v = state.db.variables.find((x) => x.id === id);
+      const order = [undefined, "double", "single", "none"];
+      const next = order[(order.indexOf(v.quote) + 1) % order.length];
+      run(() => api.patchVar(id, { quote: next ?? null }));
+    }
     else if (act === "show-all") { secretIds().forEach((i) => state.revealed.add(i)); renderContent(); }
     else if (act === "hide-all") { state.revealed.clear(); renderContent(); }
     else if (act === "new-schema") modalSchema(null);

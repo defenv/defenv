@@ -13,7 +13,7 @@ import {
   DB_VERSION,
   emptyDatabase,
 } from "./types.ts";
-import { parseEnvEntries } from "./dotenv.ts";
+import { parseEnvEntries, type QuoteStyle } from "./dotenv.ts";
 import { dbPath } from "./paths.ts";
 
 const now = () => new Date().toISOString();
@@ -37,6 +37,9 @@ function migrate(raw: Record<string, unknown>): Database {
       const ctx: Space = { id: uid(), name: "default", order: 0, createdAt: now(), updatedAt: now() };
       db.spaces.push(ctx);
       db.activeSpaceId = ctx.id;
+    }
+    for (const v of db.variables as unknown as Array<Record<string, unknown>>) {
+      if (v.quote === undefined && v.quoted !== undefined) { v.quote = v.quoted ? "double" : undefined; delete v.quoted; }
     }
     return db;
   }
@@ -246,7 +249,7 @@ export class Store {
     return this.#db.variables.find((v) => v.spaceId === spaceId && v.groupId === groupId && v.key === key);
   }
 
-  addVariable(input: { spaceId: string; key: string; value?: string; groupId?: string | null; secret?: boolean; description?: string; quoted?: boolean }): Variable {
+  addVariable(input: { spaceId: string; key: string; value?: string; groupId?: string | null; secret?: boolean; description?: string; quote?: QuoteStyle }): Variable {
     this.getSpace(input.spaceId);
     const key = input.key.trim();
     if (!KEY_RE.test(key)) throw new ConflictError(`"${key}" is not a valid env var name.`);
@@ -265,7 +268,7 @@ export class Store {
       groupId,
       secret: input.secret ?? false,
       description: input.description,
-      quoted: input.quoted || undefined,
+      quote: input.quote,
       order,
       createdAt: now(),
       updatedAt: now(),
@@ -273,7 +276,7 @@ export class Store {
     this.#db.variables.push(v);
     return v;
   }
-  updateVariable(id: string, patch: { key?: string; value?: string; secret?: boolean; description?: string; quoted?: boolean }): Variable {
+  updateVariable(id: string, patch: { key?: string; value?: string; secret?: boolean; description?: string; quote?: QuoteStyle | null }): Variable {
     const v = this.variableById(id);
     if (patch.key !== undefined) {
       const key = patch.key.trim();
@@ -285,7 +288,7 @@ export class Store {
     if (patch.value !== undefined) v.value = patch.value;
     if (patch.secret !== undefined) v.secret = patch.secret;
     if (patch.description !== undefined) v.description = patch.description;
-    if (patch.quoted !== undefined) v.quoted = patch.quoted || undefined;
+    if (patch.quote !== undefined) v.quote = patch.quote || undefined;
     v.updatedAt = now();
     return v;
   }
@@ -508,11 +511,11 @@ export class Store {
       if (existing) {
         existing.value = entry.value;
         if (entry.description !== undefined) existing.description = entry.description;
-        existing.quoted = entry.quoted || undefined;
+        existing.quote = entry.quote;
         existing.updatedAt = now();
         updated.push(entry.key);
       } else {
-        this.addVariable({ spaceId, key: entry.key, value: entry.value, groupId: scope, description: entry.description, quoted: entry.quoted });
+        this.addVariable({ spaceId, key: entry.key, value: entry.value, groupId: scope, description: entry.description, quote: entry.quote });
         created.push(entry.key);
       }
     }

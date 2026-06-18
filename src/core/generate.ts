@@ -78,7 +78,7 @@ export function renderEnv(store: Store, schema: Schema, opts: { example?: boolea
     const keys: string[] = [];
     for (const v of section.variables) {
       if (v.description) lines.push(`# ${v.description}`);
-      lines.push(opts.example ? `${v.key}=` : `${v.key}=${serializeValue(v.value, v.quoted)}`);
+      lines.push(opts.example ? `${v.key}=` : `${v.key}=${serializeValue(v.value, v.quote)}`);
       keys.push(v.key);
       count++;
     }

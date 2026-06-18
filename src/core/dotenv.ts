@@ -1,45 +1,74 @@
-// Parse and serialize .env text, with correct double-quote handling.
+// Parse and serialize .env text, preserving each value's QUOTE STYLE so that
+// imports round-trip exactly:
 //
-// Round-trip contract: the value stored in the database is always the RAW,
-// decoded string (no surrounding quotes, no escape sequences). Quoting and
-// escaping happen only at serialize time; unquoting/decoding only at parse time.
+//   • double-quoted  "x"   -> escaped on the way in, escaped again on the way out
+//   • single-quoted  'x'   -> literal in and out (great for JSON: no escaping)
+//   • unquoted        x    -> kept raw / unquoted (JSON stays JSON, not escaped)
+//
+// The value stored in the database is always the RAW, decoded string. The quote
+// style is remembered separately and applied only at serialize time.
 
-// Characters that never need quoting when written out (covers typical URLs,
-// connection strings, paths). Anything else (spaces, '#', quotes, backslash,
-// parentheses, control chars, ...) forces a double-quoted, escaped value.
+export type QuoteStyle = "single" | "double" | "none";
+
+// Characters safe to write unquoted when no explicit style is set (auto mode).
 const SAFE = /^[A-Za-z0-9_.\-/:@+=?&,%~]*$/;
 
-/** Quote/escape a value following common dotenv conventions. */
-export function serializeValue(value: string, forceQuote = false): string {
-  if (!forceQuote) {
-    if (value === "") return "";
-    if (SAFE.test(value)) return value;
-  }
-  const escaped = value
+function escapeDouble(value: string): string {
+  return value
     .replace(/\\/g, "\\\\")
     .replace(/"/g, '\\"')
     .replace(/\n/g, "\\n")
     .replace(/\r/g, "\\r")
     .replace(/\t/g, "\\t");
-  return `"${escaped}"`;
+}
+
+/**
+ * Serialize a value for a .env line, honoring an explicit quote style:
+ *   - "single": wrap in single quotes, literal (no escaping)
+ *   - "double": wrap in double quotes, with escaping
+ *   - "none":   keep raw/unquoted (only protected if it would break the file)
+ *   - undefined (auto): unquoted when safe, else double-quoted+escaped
+ */
+export function serializeValue(value: string, quote?: QuoteStyle): string {
+  if (quote === "single") {
+    if (!value.includes("'") && !/[\n\r]/.test(value)) return `'${value}'`;
+    return `"${escapeDouble(value)}"`; // can't single-quote this; fall back
+  }
+  if (quote === "double") {
+    return `"${escapeDouble(value)}"`;
+  }
+  if (quote === "none") {
+    if (/[\n\r]/.test(value)) return `"${escapeDouble(value)}"`;          // can't be unquoted
+    if (value.includes(" #")) return value.includes("'") ? `"${escapeDouble(value)}"` : `'${value}'`; // protect from comment, without escaping
+    return value;
+  }
+  // auto
+  if (value === "") return "";
+  if (SAFE.test(value)) return value;
+  return `"${escapeDouble(value)}"`;
 }
 
 /** Decode the right-hand side of a KEY=VALUE line into its raw string. */
-function unquote(raw: string): string {
-  const v = raw.trim();
+function decode(rawVal: string): string {
+  const v = rawVal.trim();
   if (v.length >= 2 && v[0] === '"' && v[v.length - 1] === '"') {
-    // double-quoted: process escapes in a single left-to-right pass
     return v.slice(1, -1).replace(/\\([nrt"\\])/g, (_m, c) =>
       ({ n: "\n", r: "\r", t: "\t", '"': '"', "\\": "\\" } as Record<string, string>)[c]
     );
   }
   if (v.length >= 2 && v[0] === "'" && v[v.length - 1] === "'") {
-    // single-quoted: literal, no escape processing
-    return v.slice(1, -1);
+    return v.slice(1, -1); // literal
   }
-  // unquoted: strip a trailing " # comment" only when not quoted
-  const hash = v.indexOf(" #");
+  const hash = v.indexOf(" #"); // unquoted: strip a trailing " # comment"
   return (hash !== -1 ? v.slice(0, hash) : v).trim();
+}
+
+/** Detect the quote style used for a raw RHS. */
+function quoteStyleOf(rawVal: string): QuoteStyle {
+  const v = rawVal.trim();
+  if (v.length >= 2 && v[0] === '"' && v[v.length - 1] === '"') return "double";
+  if (v.length >= 2 && v[0] === "'" && v[v.length - 1] === "'") return "single";
+  return "none";
 }
 
 const KEY_OK = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -48,13 +77,13 @@ export interface EnvEntry {
   key: string;
   value: string;
   description?: string;
-  quoted?: boolean; // the source wrapped this value in quotes
+  quote?: QuoteStyle;
 }
 
 /**
  * Parse a .env body into ordered entries. A comment line (or contiguous block)
  * immediately above a KEY=VALUE is captured as that entry's description, unless
- * `skipComments` is set, in which case all comments are ignored.
+ * `skipComments` is set.
  */
 export function parseEnvEntries(text: string, opts: { skipComments?: boolean } = {}): EnvEntry[] {
   const out: EnvEntry[] = [];
@@ -75,11 +104,8 @@ export function parseEnvEntries(text: string, opts: { skipComments?: boolean } =
     if (eq === -1) { comment = null; continue; }
     const key = line.slice(0, eq).trim();
     if (!KEY_OK.test(key)) { comment = null; continue; }
-    const rawVal = line.slice(eq + 1).trim();
-    const quoted = rawVal.length >= 2 &&
-      ((rawVal[0] === '"' && rawVal[rawVal.length - 1] === '"') ||
-       (rawVal[0] === "'" && rawVal[rawVal.length - 1] === "'"));
-    out.push({ key, value: unquote(rawVal), description: comment ?? undefined, quoted: quoted || undefined });
+    const rawVal = line.slice(eq + 1);
+    out.push({ key, value: decode(rawVal), quote: quoteStyleOf(rawVal), description: comment ?? undefined });
     comment = null;
   }
   return out;

@@ -23,6 +23,7 @@ SRC=""
 if [ -n "${DEFENV_SRC:-}" ] && [ -f "${DEFENV_SRC%/}/cli.ts" ]; then
   SRC="${DEFENV_SRC%/}"
 else
+  # If this script sits next to cli.ts, install straight from here.
   SELF="$0"
   case "$SELF" in sh|-sh|bash|-bash|dash|-) SELF="" ;; esac
   if [ -n "$SELF" ] && [ -f "$(dirname "$SELF")/cli.ts" ]; then

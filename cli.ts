@@ -116,7 +116,9 @@ async function vars() {
       const key = need(rest[0], "var add KEY [VALUE]");
       const group = groupArgs[0] ? s.findGroup(cid, groupArgs[0]) : null;
       if (groupArgs[0] && !group) fail(`no group "${groupArgs[0]}"`);
-      s.addVariable({ spaceId: cid, key, value: rest[1] ?? "", groupId: group?.id ?? null, secret: !!args.secret, description: str("desc"), quoted: !!args.quote });
+      const qs = str("quote-style");
+      const quote = qs === "single" || qs === "double" || qs === "none" ? qs : args.quote ? "double" : undefined;
+      s.addVariable({ spaceId: cid, key, value: rest[1] ?? "", groupId: group?.id ?? null, secret: !!args.secret, description: str("desc"), quote });
       await s.save(); console.log(green(`+ ${key}`));
     } else if (sub === "set") { const v = findVar(need(rest[0], "var set KEY VALUE")); s.updateVariable(v.id, { value: need(rest[1], "var set KEY VALUE") }); await s.save(); console.log(green(`set ${v.key}`)); }
     else if (sub === "mv") {

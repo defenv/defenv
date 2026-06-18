@@ -127,10 +127,12 @@ ids) — the three tabs below always show the active space. Same core as the CLI
   with a count and inline rename; each row edits key/value, carries an optional
   **note**, and reassigns the group. Secret values are **hidden by default** with
   per-row **eye** (show/hide) and **copy** icons that colour green when active, a
-  **lock** icon to mark/unmark secret, a **quote** icon to force the value to be
-  exported wrapped in double quotes (set automatically when a value is imported
-  quoted, and always on for values containing `#`); the **copy** icon then copies
-  the value *with* its surrounding quotes. Plus **Show all / Hide all**.
+  **lock** icon to mark/unmark secret, a **quote** icon that cycles the export
+  quote style — *auto* (quote only when needed), *none* (raw), *single* (`'…'`,
+  literal), *double* (`"…"`, escaped). Importing preserves the input style, so a
+  JSON value stays unescaped (kept single-quoted or raw) while a double-quoted
+  value round-trips escaped. The **copy** icon copies the value in that style.
+  Plus **Show all / Hide all**.
   **Deleting is select-then-confirm**: tick one or more rows (or click a row) and a
   **Delete N** button appears, so nothing is removed by a single misclick. Groups **collapse/expand** individually or via **Collapse all / Expand all**. Live
   **search** over keys, values, and notes (with a clear button); a **Paste .env** popup bulk-imports
